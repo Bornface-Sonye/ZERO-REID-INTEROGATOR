@@ -1,3 +1,4 @@
+#  Log in screen, sign up window, sqlite and sentiment analysis added
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QMessageBox, QAction, QMenu, QTextEdit, QProgressBar,
