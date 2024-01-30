@@ -1,18 +1,13 @@
-#  Log in screen, sign up window, sqlite and sentiment analysis added
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QMessageBox, QAction, QMenu, QTextEdit, QProgressBar,
     QWidget, QToolTip, QButtonGroup, QGroupBox, QSizePolicy, QSizeGrip, QSlider, QScrollBar, QDial,
-    QSpinBox, QDoubleSpinBox, QLCDNumber, QFrame, QScrollArea,QSplashScreen
+    QSpinBox, QDoubleSpinBox, QLCDNumber, QFrame, QScrollArea, QSplashScreen, QComboBox,QListWidget
 )
 from PyQt5.QtGui import QPixmap, QFont
 from PyQt5.QtCore import Qt, QTimer
 import sys
-import nltk
-from nltk.sentiment import SentimentIntensityAnalyzer
-import spacy as sp
 import sqlite3
-import time
 
 class Database:
     def __init__(self, db_file):
@@ -21,78 +16,72 @@ class Database:
         self.create_tables()
 
     def create_tables(self):
-        self.cur.execute('''CREATE TABLE IF NOT EXISTS Role (
-                                RoleID INTEGER PRIMARY KEY AUTOINCREMENT,
-                                RoleName TEXT NOT NULL
-                            )''')
+            self.cur.execute('''CREATE TABLE IF NOT EXISTS Role (
+                            RoleID INTEGER PRIMARY KEY AUTOINCREMENT,
+                            RoleName TEXT NOT NULL
+                        )''')
 
-        self.cur.execute('''CREATE TABLE IF NOT EXISTS User (
-                                UserID INTEGER PRIMARY KEY AUTOINCREMENT,
-                                FirstName TEXT NOT NULL,
-                                LastName TEXT NOT NULL,
-                                Email TEXT UNIQUE NOT NULL,
-                                Password TEXT NOT NULL,
-                                RoleID INTEGER,
-                                FOREIGN KEY (RoleID) REFERENCES Role(RoleID)
-                            )''')
+            self.cur.execute('''CREATE TABLE IF NOT EXISTS User (
+                            UserID INTEGER PRIMARY KEY AUTOINCREMENT,
+                            FirstName TEXT NOT NULL,
+                            LastName TEXT NOT NULL,
+                            Email TEXT UNIQUE NOT NULL,
+                            Password TEXT NOT NULL,
+                            RoleID INTEGER,
+                            FOREIGN KEY (RoleID) REFERENCES Role(RoleID)
+                        )''')
 
-        self.cur.execute('''CREATE TABLE IF NOT EXISTS Cases (
-                                CaseID INTEGER PRIMARY KEY AUTOINCREMENT,
-                                CaseDescription TEXT
-                            )''')
+            self.cur.execute('''CREATE TABLE IF NOT EXISTS Cases (
+                            CaseID INTEGER PRIMARY KEY AUTOINCREMENT,
+                            CaseDescription TEXT
+                        )''')
 
-        self.cur.execute('''CREATE TABLE IF NOT EXISTS Witness (
-                                WitnessID INTEGER PRIMARY KEY AUTOINCREMENT,
-                                UserID INTEGER,
-                                CaseID INTEGER,
-                                FOREIGN KEY (UserID) REFERENCES User(UserID),
-                                FOREIGN KEY (CaseID) REFERENCES Cases(CaseID)
-                            )''')
+            self.cur.execute('''CREATE TABLE IF NOT EXISTS Witness (
+                            WitnessID INTEGER PRIMARY KEY AUTOINCREMENT,
+                            UserID INTEGER,
+                            CaseID INTEGER,
+                            Gender TEXT,  -- Added Gender column
+                            FOREIGN KEY (UserID) REFERENCES User(UserID),
+                            FOREIGN KEY (CaseID) REFERENCES Cases(CaseID)
+                        )''')
 
-        self.conn.commit()
+            self.cur.execute('''CREATE TABLE IF NOT EXISTS Suspect (
+                            SuspectID INTEGER PRIMARY KEY AUTOINCREMENT,
+                            UserID INTEGER,
+                            CaseID INTEGER,
+                            Gender TEXT,
+                            FOREIGN KEY (UserID) REFERENCES User(UserID),
+                            FOREIGN KEY (CaseID) REFERENCES Cases(CaseID)
+                        )''')
+
+            self.cur.execute('''CREATE TABLE IF NOT EXISTS LawEnforcer (
+                            EnforcerID INTEGER PRIMARY KEY AUTOINCREMENT,
+                            UserID INTEGER,
+                            CaseID INTEGER,
+                            FOREIGN KEY (UserID) REFERENCES User(UserID),
+                            FOREIGN KEY (CaseID) REFERENCES Cases(CaseID)
+                        )''')
+
+            self.cur.execute('''CREATE TABLE IF NOT EXISTS Admin (
+                            AdminID INTEGER PRIMARY KEY AUTOINCREMENT,
+                            UserID INTEGER,
+                            FOREIGN KEY (UserID) REFERENCES User(UserID)
+                        )''')
+
+            self.cur.execute('''CREATE TABLE IF NOT EXISTS CaseProgress (
+                            ProgressID INTEGER PRIMARY KEY AUTOINCREMENT,
+                            CaseID INTEGER,
+                            Progress TEXT,
+                            FOREIGN KEY (CaseID) REFERENCES Cases(CaseID)
+                        )''')
+
+            self.conn.commit()
+
 
     def close_connection(self):
         self.conn.close()
 
-class SentimentAnalysis:
-    def __init__(self):
-        # Initialize NLTK Sentiment Intensity Analyzer
-        self.sid = SentimentIntensityAnalyzer()
-        # Initialize spaCy NLP model
-        self.nlp = sp.load("en_core_web_sm")
-
-    def is_obedient(self, text):
-        # Sentiment analysis for obedience
-        # You can define your own rules for determining obedience based on sentiment scores
-        sentiment_scores = self.sid.polarity_scores(text)
-        obedient_score = sentiment_scores['compound']
-        if obedient_score >= 0:
-            return 'Yes' # Obedient
-        else:
-            return 'No' # Not obedient
-
-    def calculate_emotion_score(self, text):
-        # Calculate emotion score
-        sentiment_scores = self.sid.polarity_scores(text)
-        emotion_score = sentiment_scores['compound']
-        return emotion_score
-
-    def calculate_consistency_score(self, text1, text2):
-        # Calculate consistency score based on two sets of text
-        doc1 = self.nlp(text1)
-        doc2 = self.nlp(text2)
-        # You can define your own logic to calculate consistency score
-        # For example, you can measure the similarity between two text samples
-        similarity = doc1.similarity(doc2)
-        consistency_score = (similarity + 1) / 2 # Normalize to [0, 1]
-        return consistency_score
-
-    def calculate_confidence_score(self, emotion_score, consistency_score):
-        # Calculate confidence score as an average of emotion and consistency scores
-        confidence_score = (emotion_score + consistency_score) / 2
-        return confidence_score
-
-class SignupWindow(QWidget):
+class SignupWindow(QDialog):
     def __init__(self, db, login_callback):
         super().__init__()
         self.db = db
@@ -125,6 +114,12 @@ class SignupWindow(QWidget):
         self.layout.addWidget(self.label_password)
         self.layout.addWidget(self.lineedit_password)
 
+        self.label_gender = QLabel("Gender:")
+        self.combobox_gender = QComboBox()
+        self.combobox_gender.addItems(["Male", "Female"])
+        self.layout.addWidget(self.label_gender)
+        self.layout.addWidget(self.combobox_gender)
+
         self.button_signup = QPushButton("Signup")
         self.button_signup.clicked.connect(self.signup)
         self.layout.addWidget(self.button_signup)
@@ -137,13 +132,14 @@ class SignupWindow(QWidget):
         self.layout.setAlignment(Qt.AlignCenter)
 
         # Set a reasonable size
-        self.resize(300, 200)
+        self.resize(300, 250)
 
     def signup(self):
         firstname = self.lineedit_firstname.text().strip()
         lastname = self.lineedit_lastname.text().strip()
         email = self.lineedit_email.text().strip()
         password = self.lineedit_password.text().strip()
+        gender = self.combobox_gender.currentText()
 
         if not firstname or not lastname or not email or not password:
             QMessageBox.warning(self, "Please fill in all fields.", "Warning")
@@ -161,11 +157,22 @@ class SignupWindow(QWidget):
             self.db.cur.execute("INSERT INTO User (FirstName, LastName, Email, Password) VALUES (?, ?, ?, ?)",
                                 (firstname, lastname, email, password))
             self.db.conn.commit()
+            user_id = self.db.cur.lastrowid
+
+            role_id = self.get_role_id("Witness")  # Default role for signup
+            self.db.cur.execute("INSERT INTO Witness (UserID, Gender) VALUES (?, ?)", (user_id, gender))
+            self.db.conn.commit()
+
             QMessageBox.information(self, "Signup successful.", "Success")
         except Exception as e:
-            QMessageBox.warning(self, "Error during signup:", f"Error {str(e)}")
+            QMessageBox.warning(self, f"Error during signup: {str(e)}", "Error")
 
-class LoginWindow(QWidget):
+    def get_role_id(self, role_name):
+        self.db.cur.execute("SELECT RoleID FROM Role WHERE RoleName = ?", (role_name,))
+        role_id = self.db.cur.fetchone()
+        return role_id[0] if role_id else None
+
+class LoginWindow(QDialog):
     def __init__(self, db, login_callback):
         super().__init__()
         self.db = db
@@ -225,8 +232,10 @@ class LoginWindow(QWidget):
         self.close()
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, db, user_id):
         super().__init__()
+        self.db = db
+        self.user_id = user_id
 
         self.setWindowTitle("Witness Submission System")
         self.setGeometry(100, 100, QApplication.desktop().screenGeometry().width(), QApplication.desktop().screenGeometry().height())
@@ -256,9 +265,35 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Save", "Save functionality to be implemented.")
 
     def show_pending_cases(self):
-        self.pending_cases_window = WitnessSubmissionWindow()
+        self.pending_cases_window = PendingCasesWindow(self.db, self.user_id)
         self.pending_cases_window.show()
-        
+
+class PendingCasesWindow(QDialog):
+    def __init__(self, db, user_id):
+        super().__init__()
+        self.db = db
+        self.user_id = user_id
+        self.setWindowTitle("Pending Cases")
+
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+
+        self.label_cases = QLabel("Your Pending Cases:")
+        self.layout.addWidget(self.label_cases)
+
+        self.listwidget_cases = QListWidget()
+        self.layout.addWidget(self.listwidget_cases)
+
+        self.load_pending_cases()
+
+    def load_pending_cases(self):
+        self.listwidget_cases.clear()
+        # Fetch and display pending cases for the user
+        self.db.cur.execute("SELECT CaseID FROM Witness WHERE UserID = ?", (self.user_id,))
+        pending_cases = self.db.cur.fetchall()
+        for case_id in pending_cases:
+            self.listwidget_cases.addItem(str(case_id[0]))
+
 class Launcher(QMainWindow):
     def __init__(self, db):
         super().__init__()
@@ -267,66 +302,16 @@ class Launcher(QMainWindow):
         self.setCentralWidget(self.login_window)
 
     def show_main_window(self):
-        self.main_window = MainWindow()
-        self.setCentralWidget(self.main_window)
+        user_id = self.get_user_id()
+        if user_id:
+            self.main_window = MainWindow(self.db, user_id)
+            self.setCentralWidget(self.main_window)
 
-class WitnessSubmissionWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Witness Submission")
-        self.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint | Qt.WindowMinimizeButtonHint)
-        self.setGeometry(0, 0, QApplication.desktop().screenGeometry().width(), QApplication.desktop().screenGeometry().height())
-
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-
-        self.layout = QVBoxLayout()
-        self.central_widget.setLayout(self.layout)
-
-        self.label_question = QLabel("Question:")
-        self.layout.addWidget(self.label_question)
-
-        self.lineedit_answer = QLineEdit()
-        self.layout.addWidget(self.lineedit_answer)
-
-        self.progress_bar = QProgressBar()
-        self.layout.addWidget(self.progress_bar)
-
-        self.button_next = QPushButton("Next")
-        self.button_next.clicked.connect(self.next_question)
-        self.layout.addWidget(self.button_next)
-
-        # Add ToolTip
-        QToolTip.setFont(QFont('SansSerif', 10))
-        self.button_next.setToolTip('Click to proceed to the next question')
-
-        self.current_question_index = 0
-        self.questions = [
-            "What did you witness?",
-            "Where did the incident occur?",
-            "When did it happen?",
-            "Who else was present?",
-            "Did you see any suspicious activities before or after the incident?"
-        ]
-        self.total_questions = len(self.questions)
-        self.progress_bar.setMaximum(self.total_questions)
-
-        self.show_next_question()
-
-    def show_next_question(self):
-        if self.current_question_index < self.total_questions:
-            self.label_question.setText(self.questions[self.current_question_index])
-            self.lineedit_answer.clear()
-            self.current_question_index += 1
-            self.progress_bar.setValue(self.current_question_index)
-        else:
-            QMessageBox.information(self, "Congratulations", "Thank you for your submission!")
-
-    def next_question(self):
-        if self.current_question_index < self.total_questions:
-            self.show_next_question()
-        else:
-            QMessageBox.warning(self, "Thank you for your submission!", "No more questions to display.")
+    def get_user_id(self):
+        email = self.login_window.lineedit_email.text().strip()
+        self.db.cur.execute("SELECT UserID FROM User WHERE Email = ?", (email,))
+        user_id = self.db.cur.fetchone()
+        return user_id[0] if user_id else None
 
 if __name__ == "__main__":
     app = QApplication([])
